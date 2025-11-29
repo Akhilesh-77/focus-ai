@@ -1,0 +1,7 @@
+{
+  "name": "Focus AI",
+  "description": "A smart, disciplined To-Do list app powered by Gemini AI with voice control and strict completion verification.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
