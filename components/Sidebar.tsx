@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { X, Settings, Moon, Sun, User, Quote, Database, Mic, Volume2 } from 'lucide-react';
+import React from 'react';
+import { X, Settings, Moon, Mic, Volume2, Trash2, BarChart2, Image as ImageIcon, Database, Quote } from 'lucide-react';
 import { AppSettings, GeminiModelType, Theme } from '../types';
 
 interface SidebarProps {
@@ -12,47 +12,10 @@ interface SidebarProps {
 
 const MODELS: GeminiModelType[] = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0', 'gemini-exp'];
 
-const PRESET_AUTHORS = [
-  "Virat Kohli", "Michael Jordan", "Kobe Bryant", "Steve Jobs", 
-  "APJ Abdul Kalam", "David Goggins", "Jocko Willink", "Elon Musk"
-];
-
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSettings }) => {
-  const [newAuthor, setNewAuthor] = useState('');
-
-  const toggleAuthor = (author: string) => {
-    const current = settings.quotePreferences.authors;
-    const updated = current.includes(author)
-      ? current.filter(a => a !== author)
-      : [...current, author];
-    
-    onUpdateSettings({
-      ...settings,
-      quotePreferences: { ...settings.quotePreferences, authors: updated }
-    });
-  };
-
-  const addCustomAuthor = () => {
-    if (newAuthor.trim()) {
-      onUpdateSettings({
-        ...settings,
-        quotePreferences: {
-          ...settings.quotePreferences,
-          customAuthors: [...settings.quotePreferences.customAuthors, newAuthor.trim()]
-        }
-      });
-      setNewAuthor('');
-    }
-  };
-
-  const removeCustomAuthor = (author: string) => {
-    onUpdateSettings({
-      ...settings,
-      quotePreferences: {
-        ...settings.quotePreferences,
-        customAuthors: settings.quotePreferences.customAuthors.filter(a => a !== author)
-      }
-    });
+  const navigateTo = (hash: string) => {
+    window.location.hash = hash;
+    onClose();
   };
 
   return (
@@ -79,6 +42,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
 
         <div className="p-6 space-y-8">
           
+          {/* Navigation Links */}
+          <section className="space-y-2">
+             <button onClick={() => navigateTo('#bin')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-200 font-medium">
+               <Trash2 size={20} className="text-slate-500" />
+               Recycle Bin
+             </button>
+             <button onClick={() => navigateTo('#stats')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-200 font-medium">
+               <BarChart2 size={20} className="text-slate-500" />
+               Usage Statistics
+             </button>
+             <button onClick={() => navigateTo('#speakers')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-200 font-medium">
+               <ImageIcon size={20} className="text-slate-500" />
+               Motivation Speaker Photos
+             </button>
+          </section>
+
+          <hr className="border-slate-200 dark:border-slate-800" />
+
           {/* Theme */}
           <section>
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -151,70 +132,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
             </div>
           </section>
 
-          {/* Motivation */}
+          {/* Motivation - RESTRICTED TO VIRAT KOHLI */}
           <section>
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Quote size={16} /> Motivation Source
+              <Quote size={16} /> Mentor
             </h3>
             
             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-4">
-               <div className="flex gap-2 mb-4">
-                  <button 
-                    onClick={() => onUpdateSettings({ ...settings, quotePreferences: { ...settings.quotePreferences, mode: 'random' } })}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${settings.quotePreferences.mode === 'random' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}
-                  >
-                    Random
-                  </button>
-                  <button 
-                     onClick={() => onUpdateSettings({ ...settings, quotePreferences: { ...settings.quotePreferences, mode: 'selected' } })}
-                     className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${settings.quotePreferences.mode === 'selected' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}
-                  >
-                    Selected
-                  </button>
+               <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">VK</div>
+                  <div>
+                    <p className="text-slate-900 dark:text-white font-bold">Virat Kohli</p>
+                    <p className="text-xs text-slate-500">Selected Mentor</p>
+                  </div>
                </div>
-               
-               {settings.quotePreferences.mode === 'selected' && (
-                 <div className="space-y-2">
-                    <p className="text-xs text-slate-400 mb-2">Select Mentors:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {PRESET_AUTHORS.map(author => (
-                        <button
-                          key={author}
-                          onClick={() => toggleAuthor(author)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                            settings.quotePreferences.authors.includes(author)
-                              ? 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                          }`}
-                        >
-                          {author}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    <div className="mt-4">
-                      <p className="text-xs text-slate-400 mb-2">Add Custom:</p>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          value={newAuthor}
-                          onChange={(e) => setNewAuthor(e.target.value)}
-                          placeholder="e.g. My Father"
-                          className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button onClick={addCustomAuthor} className="px-3 bg-indigo-600 text-white rounded-lg text-sm font-bold">+</button>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                         {settings.quotePreferences.customAuthors.map(author => (
-                           <span key={author} className="flex items-center gap-1 px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-full">
-                              {author}
-                              <button onClick={() => removeCustomAuthor(author)}><X size={12} /></button>
-                           </span>
-                         ))}
-                      </div>
-                    </div>
-                 </div>
-               )}
+               <p className="text-xs text-slate-400 mt-3 italic">
+                 "Self-belief and hard work will always earn you success."
+               </p>
             </div>
           </section>
 

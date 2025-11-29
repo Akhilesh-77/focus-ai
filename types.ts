@@ -9,6 +9,7 @@ export interface Task {
   createdAt: string; // ISO String
   status: TaskStatus;
   completionProof?: string; // Base64 Data URL of attached image
+  deletedAt?: string; // ISO String if in recycle bin
 }
 
 export interface AIParsedTask {
@@ -36,6 +37,7 @@ export interface AppSettings {
   theme: Theme;
   enableVoiceInput: boolean;
   enableVoiceResponse: boolean;
+  speakerImages: Record<string, string>; // Map author name to Base64 image
 }
 
 export interface JudgeResult {
@@ -44,4 +46,12 @@ export interface JudgeResult {
   question?: string;
 }
 
-export type AppRoute = 'home' | 'settings' | 'add' | 'court' | 'voice' | 'quotes';
+export interface UserStats {
+  totalCreated: number;
+  totalCompleted: number;
+  totalDeleted: number;
+  currentStreak: number;
+  lastCompletionDate: string | null;
+}
+
+export type AppRoute = 'home' | 'settings' | 'add' | 'court' | 'voice' | 'quotes' | 'bin' | 'stats' | 'speakers';

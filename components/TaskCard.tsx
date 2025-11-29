@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Trash2, Clock, AlertCircle, Pencil, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, Trash2, Clock, AlertCircle, Pencil, Image as ImageIcon, XCircle } from 'lucide-react';
 import { Task } from '../types';
 
 interface TaskCardProps {
@@ -13,7 +13,7 @@ interface TaskCardProps {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit, onViewProof }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
-  const [isOverdue, setIsOverdue] = useState(false);
+  const [timerEnded, setTimerEnded] = useState(false);
 
   useEffect(() => {
     if (!task.deadline || task.status !== 'pending') {
@@ -27,8 +27,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit,
       const distance = deadline - now;
 
       if (distance < 0) {
-        setIsOverdue(true);
+        setTimerEnded(true);
         setTimeLeft('00:00:00');
+        // Do not auto-fail. Wait for user.
       } else {
         const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
@@ -45,7 +46,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit,
   const getStatusColor = () => {
     if (task.status === 'completed') return 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800';
     if (task.status === 'failed') return 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800';
-    if (isOverdue) return 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800';
+    if (timerEnded) return 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800';
     return 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700';
   };
 
@@ -77,9 +78,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit,
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
             <div className="flex flex-wrap items-center gap-2">
                {task.deadline && task.status === 'pending' && (
-                 <div className={`flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg font-medium ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                 <div className={`flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg font-medium ${timerEnded ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 animate-pulse' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                    <Clock size={14} />
-                   {timeLeft}
+                   {timerEnded ? "Timer Ended" : timeLeft}
                  </div>
                )}
                <span className="text-xs text-slate-400 font-medium">
@@ -108,11 +109,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit,
                 </button>
               )}
 
-              {task.status === 'pending' && !isOverdue && (
+              {task.status === 'pending' && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete(task); }}
-                  className="p-2.5 text-slate-400 hover:text-green-600 dark:text-slate-500 dark:hover:text-green-400 transition-colors rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 border border-slate-100 dark:border-slate-700"
-                  title="Complete Task"
+                  className={`p-2.5 transition-colors rounded-xl border border-slate-100 dark:border-slate-700 ${timerEnded ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 hover:bg-green-200 animate-bounce' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-green-600 dark:text-slate-500 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30'}`}
+                  title={timerEnded ? "Timer ended. Did you finish?" : "Complete Task"}
                 >
                   <CheckCircle size={20} />
                 </button>
@@ -127,6 +128,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onComplete, onDelete, onEdit,
               </button>
             </div>
         </div>
+        
+        {timerEnded && task.status === 'pending' && (
+          <div className="text-center text-xs font-bold text-red-500 mt-1">
+            Timer ended. Did you complete this task?
+          </div>
+        )}
       </div>
     </div>
   );

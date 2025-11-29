@@ -54,21 +54,14 @@ export const parseVoiceCommand = async (transcript: string, modelSelection: Gemi
 export const getPersonalizedQuote = async (prefs: QuotePreference, modelSelection: GeminiModelType): Promise<string> => {
   try {
     const modelName = getModelName(modelSelection);
-    let authors = "";
     
-    if (prefs.mode === 'selected') {
-      const allAuthors = [...prefs.authors, ...prefs.customAuthors];
-      if (allAuthors.length > 0) {
-        authors = `Focus specifically on quotes from these people: ${allAuthors.join(", ")}.`;
-      }
-    }
-
+    // STRICTLY VIRAT KOHLI
     const prompt = `
-      Give a short, punchy, 1-sentence motivational quote.
-      ${authors}
-      If "Random" mode or no authors specified, pick a global successful figure (Sports, Tech, Science, Philosophy).
-      Do NOT use generic proverbs. Cite the author.
-      Tone: High performance, Discipline, Stoic.
+      Give a short, punchy, 1-sentence motivational quote from Virat Kohli.
+      Do NOT use any other author.
+      Tone: High performance, Discipline, Aggression, Focus.
+      CRITICAL: You MUST end the quote exactly with this format: " - Virat Kohli".
+      Example Output: "Self-belief and hard work will always earn you success. - Virat Kohli"
     `;
 
     const response = await ai.models.generateContent({
@@ -76,9 +69,13 @@ export const getPersonalizedQuote = async (prefs: QuotePreference, modelSelectio
       contents: prompt,
     });
 
-    return response.text || "Discipline is freedom. - Jocko Willink";
+    const text = response.text;
+    if (text && text.includes("Virat Kohli")) {
+        return text;
+    }
+    return "Self-belief and hard work will always earn you success. - Virat Kohli";
   } catch (error) {
-    return "The only easy day was yesterday. - Navy SEALs";
+    return "I like to be myself, and I don't pretend. - Virat Kohli";
   }
 };
 
@@ -97,20 +94,17 @@ export const judgeDeletion = async (
       
       Your goal: Prevent the user from being lazy, but distinguish between laziness and genuine burnout.
       
-      Rules:
-      1. If reason implies "tired", "sleepy", "exhausted", or "burnout":
-         - Treat as POTENTIALLY VALID.
-         - Do NOT reject immediately.
-         - Return 'inquiry'.
-         - Ask a probing question like: "Are you just skipping, or are you truly unable to function? Will pushing through help you grow?" or "Can this be rescheduled instead?"
-      
-      2. If reason is short, empty, emotional (without valid fatigue), or lazy -> REJECT immediately.
-      
-      3. If user answers the probing questions reasonably and shows self-awareness -> APPROVED.
-      
-      4. If reason is strictly logical (e.g., "Duplicate task", "Already done context changed") -> APPROVED.
+      CRITICAL HEALTH EXCEPTION RULE:
+      If the user mentions: tired, sleep, sleepy, fatigue, sick, stress, exhaustion, headache, mental burnout.
+      1. If you have ALREADY asked "Do you promise to return to this task later? Yes or No?" and the user answered "Yes" or "No" -> APPROVED immediately.
+      2. If you have NOT asked it yet -> Return 'inquiry'. Message MUST be exactly: "Your health comes first. Do you promise to return to this task later? Yes or No?". Do not ask anything else.
 
-      5. If user fails to justify after questioning -> REJECT.
+      NORMAL RULES (Only if not a health exception):
+      1. If reason is short, empty, emotional (without valid fatigue), or lazy -> REJECT immediately.
+      2. If user answers probing questions reasonably and shows self-awareness -> APPROVED.
+      3. If reason is strictly logical (e.g., "Duplicate task", "Already done") -> APPROVED.
+      4. If user fails to justify after questioning -> REJECT.
+      5. If ambiguous -> Return 'inquiry' with a probing question.
 
       Return JSON.
     `;

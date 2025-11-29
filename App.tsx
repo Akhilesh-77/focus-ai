@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Mic, MicOff, BrainCircuit, Menu, Send, X, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Mic, MicOff, BrainCircuit, Menu, Send, X, AlertTriangle, User } from 'lucide-react';
 import TaskCard from './components/TaskCard';
 import Modal from './components/Modal';
 import Sidebar from './components/Sidebar';
@@ -8,12 +8,16 @@ import StrictDeleteDialog from './components/StrictDeleteDialog';
 import SimpleDeleteModal from './components/SimpleDeleteModal';
 import EditTaskModal from './components/EditTaskModal';
 import CompletionModal from './components/CompletionModal';
-import { Task, Theme, AppSettings } from './types';
+import RecycleBin from './components/RecycleBin';
+import UsageStats from './components/UsageStats';
+import SpeakerManager from './components/SpeakerManager';
+import { Task, Theme, AppSettings, UserStats } from './types';
 import { parseVoiceCommand, getPersonalizedQuote } from './services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 
 const STORAGE_KEY = 'focus-ai-data';
 const SETTINGS_KEY = 'focus-ai-settings';
+const STATS_KEY = 'focus-ai-stats';
 
 declare global {
   interface Window {
@@ -25,26 +29,38 @@ const DEFAULT_SETTINGS: AppSettings = {
   geminiModel: 'gemini-1.5-flash',
   theme: Theme.LIGHT,
   quotePreferences: {
-    authors: [],
+    authors: ['Virat Kohli'], // Default strictly to Virat Kohli
     customAuthors: [],
-    mode: 'random'
+    mode: 'selected'
   },
   enableVoiceInput: true,
   enableVoiceResponse: true,
+  speakerImages: {},
+};
+
+const DEFAULT_STATS: UserStats = {
+  totalCreated: 0,
+  totalCompleted: 0,
+  totalDeleted: 0,
+  currentStreak: 0,
+  lastCompletionDate: null
 };
 
 function App() {
   // --- State ---
   const [tasks, setTasks] = useState<Task[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [stats, setStats] = useState<UserStats>(DEFAULT_STATS);
   
   // Voice State
   const [isListening, setIsListening] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState(''); 
   const [aiProcessing, setAiProcessing] = useState(false);
 
-  // App State
+  // App State - Motivation
   const [motivation, setMotivation] = useState('Initializing Focus Protocol...');
+  const [quoteAuthor, setQuoteAuthor] = useState<string>('Virat Kohli'); // Default to Virat
+  const [isQuoteFading, setIsQuoteFading] = useState(false);
   
   // Hash Based Routing State
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#home');
@@ -71,14 +87,6 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Sync Hash to Modal States
-  useEffect(() => {
-    // If hash is home, close all modals (conceptually)
-    if (currentHash === '#home') {
-       // We keep data state but UI closes based on hash check in render
-    }
-  }, [currentHash]);
-
   const navigate = (hash: string) => {
     window.location.hash = hash;
   };
@@ -100,7 +108,7 @@ function App() {
   useEffect(() => {
     const savedSettings = localStorage.getItem(SETTINGS_KEY);
     if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
+      setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) });
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setSettings(prev => ({ ...prev, theme: Theme.DARK }));
     }
@@ -110,6 +118,11 @@ function App() {
       const parsed = JSON.parse(savedData);
       setTasks(parsed.tasks || []);
     }
+
+    const savedStats = localStorage.getItem(STATS_KEY);
+    if (savedStats) {
+      setStats(JSON.parse(savedStats));
+    }
   }, []);
 
   useEffect(() => {
@@ -117,21 +130,11 @@ function App() {
       tasks,
       lastLogin: new Date().toDateString()
     }));
-    
-    const interval = setInterval(() => {
-      const now = new Date().getTime();
-      setTasks(currentTasks => 
-        currentTasks.map(t => {
-          if (t.status === 'pending' && t.deadline && new Date(t.deadline).getTime() < now) {
-            return { ...t, status: 'failed' };
-          }
-          return t;
-        })
-      );
-    }, 1000);
-
-    return () => clearInterval(interval);
   }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  }, [stats]);
 
   useEffect(() => {
     if (settings.theme === Theme.DARK) {
@@ -142,13 +145,71 @@ function App() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
-  useEffect(() => {
-    const fetchQuote = async () => {
+  // --- Quote Logic (Auto Refresh 1 min) ---
+
+  const fetchQuote = useCallback(async () => {
+    setIsQuoteFading(true);
+    
+    // Wait for fade out
+    setTimeout(async () => {
       const quote = await getPersonalizedQuote(settings.quotePreferences, settings.geminiModel);
       setMotivation(quote);
-    };
-    fetchQuote();
+      
+      // Parse author, default to Virat Kohli since strict mode
+      let foundAuthor = "Virat Kohli"; 
+      if (quote.includes('-')) {
+        const parts = quote.split('-');
+        const possible = parts[parts.length - 1].trim();
+        // Since we strictly requested Virat Kohli, if it says Virat Kohli, use it.
+        if (possible.toLowerCase().includes("kohli")) {
+           foundAuthor = "Virat Kohli";
+        }
+      }
+      setQuoteAuthor(foundAuthor);
+      setIsQuoteFading(false);
+    }, 300); // 300ms fade duration
+    
   }, [settings.quotePreferences, settings.geminiModel]);
+
+  // Initial Fetch
+  useEffect(() => {
+    fetchQuote();
+  }, [fetchQuote]);
+
+  // 1 Minute Interval Refresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchQuote();
+    }, 60000); // 60,000 ms = 1 minute
+    return () => clearInterval(interval);
+  }, [fetchQuote]);
+
+
+  // --- Logic Helpers ---
+  
+  const updateStats = (type: 'created' | 'completed' | 'deleted') => {
+    setStats(prev => {
+      const newStats = { ...prev };
+      if (type === 'created') newStats.totalCreated++;
+      if (type === 'deleted') newStats.totalDeleted++;
+      if (type === 'completed') {
+        newStats.totalCompleted++;
+        const today = new Date().toDateString();
+        if (newStats.lastCompletionDate !== today) {
+          // Simple streak logic: check if last completion was yesterday
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (newStats.lastCompletionDate === yesterday.toDateString()) {
+             newStats.currentStreak++;
+          } else if (newStats.lastCompletionDate !== today) {
+             newStats.currentStreak = 1; // Reset or Start new
+          }
+          newStats.lastCompletionDate = today;
+        }
+      }
+      return newStats;
+    });
+  };
 
   // --- Voice Integration ---
 
@@ -172,7 +233,6 @@ function App() {
     
     recognitionRef.current.onend = () => {
       setIsListening(false);
-      // Stay on #voice to let user edit
     };
     
     recognitionRef.current.onresult = (event: any) => {
@@ -181,13 +241,6 @@ function App() {
     };
 
     recognitionRef.current.start();
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    }
   };
 
   const confirmVoiceDraft = async () => {
@@ -212,6 +265,7 @@ function App() {
       };
 
       setTasks(prev => [newTask, ...prev]);
+      updateStats('created');
       speak(`Added ${parsed.title}`);
       goHome();
     } else {
@@ -241,6 +295,7 @@ function App() {
     };
 
     setTasks(prev => [newTask, ...prev]);
+    updateStats('created');
     setManualTitle('');
     setManualDesc('');
     setManualDeadline('');
@@ -256,20 +311,33 @@ function App() {
     }
   };
 
+  const performSoftDelete = (taskId: string) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, deletedAt: new Date().toISOString() } : t));
+    updateStats('deleted');
+  };
+
   const handleSimpleDelete = () => {
     if (simpleDeleteTask) {
-      setTasks(prev => prev.filter(t => t.id !== simpleDeleteTask.id));
+      performSoftDelete(simpleDeleteTask.id);
       setSimpleDeleteTask(null);
     }
   };
 
   const handleStrictDelete = () => {
     if (strictDeleteTask) {
-       setTasks(prev => prev.filter(t => t.id !== strictDeleteTask.id));
+       performSoftDelete(strictDeleteTask.id);
        setStrictDeleteTask(null);
        speak("Task removed.");
        goHome();
     }
+  };
+
+  const handleRestoreTask = (task: Task) => {
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, deletedAt: undefined } : t));
+  };
+
+  const handlePermanentDelete = (task: Task) => {
+    setTasks(prev => prev.filter(t => t.id !== task.id));
   };
 
   const handleCompleteConfirm = (proof?: string) => {
@@ -279,15 +347,29 @@ function App() {
         status: 'completed',
         completionProof: proof 
       } : t));
+      updateStats('completed');
       setCompleteTaskData(null);
       speak("Task verified. Excellent work.");
     }
   };
 
-  const pendingTasks = tasks.filter(t => t.status === 'pending');
-  const completedTasks = tasks.filter(t => t.status === 'completed');
-  const failedTasks = tasks.filter(t => t.status === 'failed');
-  const progress = tasks.length === 0 ? 0 : Math.round((completedTasks.length / tasks.length) * 100);
+  // Filter Tasks (Active vs Deleted)
+  const activeTasks = tasks.filter(t => !t.deletedAt);
+  const deletedTasks = tasks.filter(t => t.deletedAt);
+
+  const pendingTasks = activeTasks.filter(t => t.status === 'pending');
+  const completedTasks = activeTasks.filter(t => t.status === 'completed');
+  const failedTasks = activeTasks.filter(t => t.status === 'failed');
+  const progress = activeTasks.length === 0 ? 0 : Math.round((completedTasks.length / activeTasks.length) * 100);
+
+  // Quote Image Logic
+  const getSpeakerImage = () => {
+    // We are only strictly using Virat Kohli
+    const key = "Virat Kohli";
+    return settings.speakerImages[key] || null;
+  };
+
+  const speakerImage = getSpeakerImage();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -299,6 +381,33 @@ function App() {
         settings={settings}
         onUpdateSettings={setSettings}
       />
+
+      {/* Recycle Bin Page */}
+      {currentHash === '#bin' && (
+         <RecycleBin 
+            tasks={deletedTasks}
+            onRestore={handleRestoreTask}
+            onDeleteForever={handlePermanentDelete}
+            onBack={goHome}
+         />
+      )}
+
+      {/* Usage Stats Page */}
+      {currentHash === '#stats' && (
+         <UsageStats 
+            stats={stats}
+            onBack={goHome}
+         />
+      )}
+
+      {/* Speaker Manager Page */}
+      {currentHash === '#speakers' && (
+         <SpeakerManager 
+            settings={settings}
+            onUpdateSettings={setSettings}
+            onBack={goHome}
+         />
+      )}
 
       <div className="max-w-3xl mx-auto min-h-screen flex flex-col relative pb-32">
         
@@ -318,13 +427,38 @@ function App() {
         {/* Main Content */}
         <div className="px-6 flex-1 flex flex-col gap-6">
           
-          {/* Motivation */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 animate-slide-up relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-             <p className="text-sm font-bold text-indigo-500 mb-2 uppercase tracking-widest">Daily Wisdom</p>
-             <p className="text-xl md:text-2xl font-serif text-slate-800 dark:text-slate-200 leading-relaxed italic relative z-10">
-               "{motivation}"
-             </p>
+          {/* Daily Wisdom Card - Auto Refreshing */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 animate-slide-up relative overflow-hidden flex items-center justify-between gap-4 min-h-[120px]">
+             {/* Background Decoration */}
+             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
+             
+             <div className={`flex-1 relative z-10 transition-opacity duration-300 ${isQuoteFading ? 'opacity-0' : 'opacity-100'}`}>
+                <p className="text-sm font-bold text-indigo-500 mb-2 uppercase tracking-widest">Daily Wisdom</p>
+                <p className="text-xl md:text-2xl font-serif text-slate-800 dark:text-slate-200 leading-relaxed italic">
+                  "{motivation}"
+                </p>
+             </div>
+             
+             {/* Speaker Image - Always on Right */}
+             <div className="shrink-0 relative z-10">
+                {speakerImage ? (
+                  <img 
+                    src={speakerImage} 
+                    alt="Virat Kohli" 
+                    className="w-14 h-14 rounded-full shadow-md object-cover animate-fade-in border-2 border-white dark:border-slate-700 cursor-pointer"
+                    onClick={() => navigate('#speakers')}
+                    title="Manage Photo"
+                  />
+                ) : (
+                  <div 
+                    className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 cursor-pointer"
+                    onClick={() => navigate('#speakers')}
+                    title="Upload Photo"
+                  >
+                     <User size={24} />
+                  </div>
+                )}
+             </div>
           </div>
 
           {/* Progress */}
@@ -332,7 +466,7 @@ function App() {
              <div className="flex justify-between items-end mb-3">
                <div>
                   <h2 className="text-lg font-bold text-slate-800 dark:text-white">Today's Focus</h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{completedTasks.length} of {tasks.length} tasks completed</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{completedTasks.length} of {activeTasks.length} tasks completed</p>
                </div>
                <span className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{progress}%</span>
              </div>
@@ -343,7 +477,7 @@ function App() {
 
           {/* Task List */}
           <div className="space-y-4 pb-8">
-             {tasks.length === 0 && (
+             {activeTasks.length === 0 && (
                <div className="text-center py-16 opacity-50">
                  <p className="text-slate-400 text-lg">Your mind is clear.</p>
                  <p className="text-sm text-slate-400">Tap + to add a task.</p>
