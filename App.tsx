@@ -10,8 +10,8 @@ import EditTaskModal from './components/EditTaskModal';
 import CompletionModal from './components/CompletionModal';
 import RecycleBin from './components/RecycleBin';
 import UsageStats from './components/UsageStats';
-import SpeakerManager from './components/SpeakerManager';
-import { Task, Theme, AppSettings, UserStats } from './types';
+import MentorManager from './components/MentorManager';
+import { Task, Theme, AppSettings, UserStats, Mentor } from './types';
 import { parseVoiceCommand, getPersonalizedQuote } from './services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -25,17 +25,22 @@ declare global {
   }
 }
 
+const DEFAULT_MENTOR_VK: Mentor = {
+  id: 'default-vk',
+  name: 'Virat Kohli',
+  quotes: [],
+  isDefault: true,
+  // Photo can be uploaded by user, but default is undefined (silhouette)
+};
+
 const DEFAULT_SETTINGS: AppSettings = {
   geminiModel: 'gemini-1.5-flash',
   theme: Theme.LIGHT,
-  quotePreferences: {
-    authors: ['Virat Kohli'], // Default strictly to Virat Kohli
-    customAuthors: [],
-    mode: 'selected'
-  },
   enableVoiceInput: true,
   enableVoiceResponse: true,
-  speakerImages: {},
+  mentors: [DEFAULT_MENTOR_VK],
+  activeMentorId: 'default-vk',
+  mentorMode: 'selected'
 };
 
 const DEFAULT_STATS: UserStats = {
@@ -59,7 +64,7 @@ function App() {
 
   // App State - Motivation
   const [motivation, setMotivation] = useState('Initializing Focus Protocol...');
-  const [quoteAuthor, setQuoteAuthor] = useState<string>('Virat Kohli'); // Default to Virat
+  const [currentMentor, setCurrentMentor] = useState<Mentor | null>(null);
   const [isQuoteFading, setIsQuoteFading] = useState(false);
   
   // Hash Based Routing State
@@ -108,7 +113,16 @@ function App() {
   useEffect(() => {
     const savedSettings = localStorage.getItem(SETTINGS_KEY);
     if (savedSettings) {
-      setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(savedSettings) });
+      // Merge for backward compatibility
+      const parsed = JSON.parse(savedSettings);
+      
+      // Migration logic: ensure mentors exist
+      if (!parsed.mentors || parsed.mentors.length === 0) {
+        parsed.mentors = [DEFAULT_MENTOR_VK];
+        parsed.activeMentorId = DEFAULT_MENTOR_VK.id;
+      }
+
+      setSettings({ ...DEFAULT_SETTINGS, ...parsed });
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setSettings(prev => ({ ...prev, theme: Theme.DARK }));
     }
@@ -147,42 +161,52 @@ function App() {
 
   // --- Quote Logic (Auto Refresh 1 min) ---
 
-  const fetchQuote = useCallback(async () => {
+  const refreshQuote = useCallback(async () => {
+    if (settings.mentors.length === 0) return;
+
     setIsQuoteFading(true);
     
-    // Wait for fade out
     setTimeout(async () => {
-      const quote = await getPersonalizedQuote(settings.quotePreferences, settings.geminiModel);
-      setMotivation(quote);
-      
-      // Parse author, default to Virat Kohli since strict mode
-      let foundAuthor = "Virat Kohli"; 
-      if (quote.includes('-')) {
-        const parts = quote.split('-');
-        const possible = parts[parts.length - 1].trim();
-        // Since we strictly requested Virat Kohli, if it says Virat Kohli, use it.
-        if (possible.toLowerCase().includes("kohli")) {
-           foundAuthor = "Virat Kohli";
+        // 1. Determine Mentor
+        let targetMentor: Mentor;
+        if (settings.mentorMode === 'random') {
+            targetMentor = settings.mentors[Math.floor(Math.random() * settings.mentors.length)];
+        } else {
+            targetMentor = settings.mentors.find(m => m.id === settings.activeMentorId) || settings.mentors[0];
         }
-      }
-      setQuoteAuthor(foundAuthor);
-      setIsQuoteFading(false);
-    }, 300); // 300ms fade duration
-    
-  }, [settings.quotePreferences, settings.geminiModel]);
 
-  // Initial Fetch
-  useEffect(() => {
-    fetchQuote();
-  }, [fetchQuote]);
+        // 2. Get Quote
+        let quoteText = "";
+        // Try manual quotes first if available (50% chance if AI also available? No, prioritize variety. 
+        // Let's say: If manual quotes exist, 50% chance to use one. Else use AI.)
+        // Prompt says: "Add a list of quotes...".
+        
+        const useManual = targetMentor.quotes.length > 0 && Math.random() > 0.4; // 60% chance for manual if exists
+        
+        if (useManual) {
+            quoteText = targetMentor.quotes[Math.floor(Math.random() * targetMentor.quotes.length)];
+             // Formatting check
+             if (!quoteText.includes(targetMentor.name)) {
+                 quoteText = `"${quoteText}" - ${targetMentor.name}`;
+             }
+        } else {
+            // Use Gemini
+            quoteText = await getPersonalizedQuote(targetMentor.name, settings.geminiModel);
+        }
 
-  // 1 Minute Interval Refresh
+        setMotivation(quoteText);
+        setCurrentMentor(targetMentor);
+        setIsQuoteFading(false);
+
+    }, 300); // Wait for fade out
+  }, [settings.mentors, settings.activeMentorId, settings.mentorMode, settings.geminiModel]);
+
+  // Initial Fetch & Interval
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchQuote();
-    }, 60000); // 60,000 ms = 1 minute
+    refreshQuote();
+    const interval = setInterval(refreshQuote, 60000); // 1 minute
     return () => clearInterval(interval);
-  }, [fetchQuote]);
+  }, [refreshQuote]);
 
 
   // --- Logic Helpers ---
@@ -362,14 +386,6 @@ function App() {
   const failedTasks = activeTasks.filter(t => t.status === 'failed');
   const progress = activeTasks.length === 0 ? 0 : Math.round((completedTasks.length / activeTasks.length) * 100);
 
-  // Quote Image Logic
-  const getSpeakerImage = () => {
-    // We are only strictly using Virat Kohli
-    const key = "Virat Kohli";
-    return settings.speakerImages[key] || null;
-  };
-
-  const speakerImage = getSpeakerImage();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -400,9 +416,9 @@ function App() {
          />
       )}
 
-      {/* Speaker Manager Page */}
-      {currentHash === '#speakers' && (
-         <SpeakerManager 
+      {/* Mentor Manager Page */}
+      {currentHash === '#mentors' && (
+         <MentorManager 
             settings={settings}
             onUpdateSettings={setSettings}
             onBack={goHome}
@@ -428,32 +444,34 @@ function App() {
         <div className="px-6 flex-1 flex flex-col gap-6">
           
           {/* Daily Wisdom Card - Auto Refreshing */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 animate-slide-up relative overflow-hidden flex items-center justify-between gap-4 min-h-[120px]">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 animate-slide-up relative overflow-hidden flex items-center justify-between gap-4 min-h-[130px]">
              {/* Background Decoration */}
              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full -mr-10 -mt-10 blur-2xl pointer-events-none"></div>
              
              <div className={`flex-1 relative z-10 transition-opacity duration-300 ${isQuoteFading ? 'opacity-0' : 'opacity-100'}`}>
-                <p className="text-sm font-bold text-indigo-500 mb-2 uppercase tracking-widest">Daily Wisdom</p>
-                <p className="text-xl md:text-2xl font-serif text-slate-800 dark:text-slate-200 leading-relaxed italic">
-                  "{motivation}"
+                <p className="text-sm font-bold text-indigo-500 mb-2 uppercase tracking-widest flex items-center gap-2">
+                   Daily Wisdom
+                </p>
+                <p className="text-lg md:text-xl font-serif text-slate-800 dark:text-slate-200 leading-relaxed italic">
+                  {motivation}
                 </p>
              </div>
              
-             {/* Speaker Image - Always on Right */}
+             {/* Speaker Image - Always on Right - Base64 Safe */}
              <div className="shrink-0 relative z-10">
-                {speakerImage ? (
+                {currentMentor?.photo ? (
                   <img 
-                    src={speakerImage} 
-                    alt="Virat Kohli" 
+                    src={currentMentor.photo} 
+                    alt={currentMentor.name} 
                     className="w-14 h-14 rounded-full shadow-md object-cover animate-fade-in border-2 border-white dark:border-slate-700 cursor-pointer"
-                    onClick={() => navigate('#speakers')}
-                    title="Manage Photo"
+                    onClick={() => navigate('#mentors')}
+                    title={`Manage ${currentMentor.name}`}
                   />
                 ) : (
                   <div 
                     className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700 cursor-pointer"
-                    onClick={() => navigate('#speakers')}
-                    title="Upload Photo"
+                    onClick={() => navigate('#mentors')}
+                    title="Manage Mentors"
                   >
                      <User size={24} />
                   </div>

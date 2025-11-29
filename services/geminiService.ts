@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AIParsedTask, GeminiModelType, JudgeResult, QuotePreference } from "../types";
+import { AIParsedTask, GeminiModelType, JudgeResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -51,17 +51,15 @@ export const parseVoiceCommand = async (transcript: string, modelSelection: Gemi
   }
 };
 
-export const getPersonalizedQuote = async (prefs: QuotePreference, modelSelection: GeminiModelType): Promise<string> => {
+export const getPersonalizedQuote = async (authorName: string, modelSelection: GeminiModelType): Promise<string> => {
   try {
     const modelName = getModelName(modelSelection);
     
-    // STRICTLY VIRAT KOHLI
     const prompt = `
-      Give a short, punchy, 1-sentence motivational quote from Virat Kohli.
-      Do NOT use any other author.
+      Give a short, punchy, 1-sentence motivational quote from ${authorName}.
       Tone: High performance, Discipline, Aggression, Focus.
-      CRITICAL: You MUST end the quote exactly with this format: " - Virat Kohli".
-      Example Output: "Self-belief and hard work will always earn you success. - Virat Kohli"
+      CRITICAL: You MUST end the quote exactly with this format: " - ${authorName}".
+      Example Output: "Self-belief and hard work will always earn you success. - ${authorName}"
     `;
 
     const response = await ai.models.generateContent({
@@ -70,12 +68,12 @@ export const getPersonalizedQuote = async (prefs: QuotePreference, modelSelectio
     });
 
     const text = response.text;
-    if (text && text.includes("Virat Kohli")) {
+    if (text && text.includes(authorName)) {
         return text;
     }
-    return "Self-belief and hard work will always earn you success. - Virat Kohli";
+    return `Stay focused and never give up. - ${authorName}`;
   } catch (error) {
-    return "I like to be myself, and I don't pretend. - Virat Kohli";
+    return `Hard work beats talent when talent doesn't work hard. - ${authorName}`;
   }
 };
 

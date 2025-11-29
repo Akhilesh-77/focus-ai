@@ -14,30 +14,34 @@ const PRESET_AUTHORS = ["Virat Kohli"];
 
 const SpeakerManager: React.FC<Props> = ({ settings, onUpdateSettings, onBack }) => {
   
-  const handleImageUpload = (author: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (authorName: string, e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64 = reader.result as string;
+        
+        // Update the mentor's photo in the mentors array
+        const updatedMentors = settings.mentors.map(m => 
+          m.name === authorName ? { ...m, photo: base64 } : m
+        );
+
         onUpdateSettings({
           ...settings,
-          speakerImages: {
-            ...settings.speakerImages,
-            [author]: base64
-          }
+          mentors: updatedMentors
         });
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const removeImage = (author: string) => {
-    const newImages = { ...settings.speakerImages };
-    delete newImages[author];
+  const removeImage = (authorName: string) => {
+    const updatedMentors = settings.mentors.map(m => 
+      m.name === authorName ? { ...m, photo: undefined } : m
+    );
     onUpdateSettings({
       ...settings,
-      speakerImages: newImages
+      mentors: updatedMentors
     });
   };
 
@@ -60,9 +64,13 @@ const SpeakerManager: React.FC<Props> = ({ settings, onUpdateSettings, onBack })
         
         <div className="grid grid-cols-1 gap-4">
           {PRESET_AUTHORS.map(author => {
-            // Check for image using exact name match
-            const hasImage = !!settings.speakerImages[author];
-            const imageSrc = settings.speakerImages[author];
+            const mentor = settings.mentors.find(m => m.name === author);
+            
+            // If mentor not found in system, skip (or could optionally render placeholder)
+            if (!mentor) return null;
+
+            const hasImage = !!mentor.photo;
+            const imageSrc = mentor.photo;
 
             return (
               <div key={author} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">

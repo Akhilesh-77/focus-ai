@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { X, Settings, Moon, Mic, Volume2, Trash2, BarChart2, Image as ImageIcon, Database, Quote } from 'lucide-react';
-import { AppSettings, GeminiModelType, Theme } from '../types';
+import { X, Settings, Moon, Mic, Volume2, Trash2, BarChart2, Users, Database, ChevronRight, Shuffle } from 'lucide-react';
+import { AppSettings, GeminiModelType, Theme, Mentor } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -16,6 +16,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
   const navigateTo = (hash: string) => {
     window.location.hash = hash;
     onClose();
+  };
+
+  const getActiveMentorName = () => {
+    if (settings.mentorMode === 'random') return "Random Mode";
+    const mentor = settings.mentors.find(m => m.id === settings.activeMentorId);
+    return mentor ? mentor.name : "Select Mentor";
   };
 
   return (
@@ -51,10 +57,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
              <button onClick={() => navigateTo('#stats')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-200 font-medium">
                <BarChart2 size={20} className="text-slate-500" />
                Usage Statistics
-             </button>
-             <button onClick={() => navigateTo('#speakers')} className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-200 font-medium">
-               <ImageIcon size={20} className="text-slate-500" />
-               Motivation Speaker Photos
              </button>
           </section>
 
@@ -106,6 +108,71 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
             </div>
           </section>
 
+          {/* Motivation System */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                 <Users size={16} /> Mentors
+               </h3>
+               <button onClick={() => navigateTo('#mentors')} className="text-xs text-indigo-500 font-bold hover:underline">
+                 Manage
+               </button>
+            </div>
+            
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-3 border border-slate-100 dark:border-slate-800">
+               <div className="flex justify-between items-center mb-3">
+                 <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Active Mode</span>
+               </div>
+               
+               <div className="flex gap-2">
+                  <button 
+                    onClick={() => onUpdateSettings({ ...settings, mentorMode: 'selected' })}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${settings.mentorMode === 'selected' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}
+                  >
+                    Selected
+                  </button>
+                  <button 
+                    onClick={() => onUpdateSettings({ ...settings, mentorMode: 'random' })}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors ${settings.mentorMode === 'random' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}
+                  >
+                    <Shuffle size={12} /> Random
+                  </button>
+               </div>
+
+               {settings.mentorMode === 'selected' && (
+                 <div className="mt-4">
+                    <label className="text-xs font-bold text-slate-400 block mb-2">Select Primary Mentor</label>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                       {settings.mentors.map(mentor => (
+                         <button
+                           key={mentor.id}
+                           onClick={() => onUpdateSettings({ ...settings, activeMentorId: mentor.id })}
+                           className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-all ${settings.activeMentorId === mentor.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                         >
+                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden shrink-0">
+                               {mentor.photo ? (
+                                 <img src={mentor.photo} alt={mentor.name} className="w-full h-full object-cover" />
+                               ) : (
+                                 <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">{mentor.name.substring(0,2)}</div>
+                               )}
+                            </div>
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{mentor.name}</span>
+                            {settings.activeMentorId === mentor.id && <div className="w-2 h-2 rounded-full bg-indigo-500 ml-auto" />}
+                         </button>
+                       ))}
+                    </div>
+                 </div>
+               )}
+            </div>
+            
+            <button 
+              onClick={() => navigateTo('#mentors')}
+              className="w-full py-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 text-sm font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors"
+            >
+              Add New Mentor <ChevronRight size={16} />
+            </button>
+          </section>
+
           {/* AI Model */}
           <section>
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -129,26 +196,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, settings, onUpdateSe
                    />
                 </label>
               ))}
-            </div>
-          </section>
-
-          {/* Motivation - RESTRICTED TO VIRAT KOHLI */}
-          <section>
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Quote size={16} /> Mentor
-            </h3>
-            
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-4">
-               <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">VK</div>
-                  <div>
-                    <p className="text-slate-900 dark:text-white font-bold">Virat Kohli</p>
-                    <p className="text-xs text-slate-500">Selected Mentor</p>
-                  </div>
-               </div>
-               <p className="text-xs text-slate-400 mt-3 italic">
-                 "Self-belief and hard work will always earn you success."
-               </p>
             </div>
           </section>
 

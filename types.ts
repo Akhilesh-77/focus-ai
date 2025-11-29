@@ -25,19 +25,24 @@ export enum Theme {
 
 export type GeminiModelType = 'gemini-1.5-flash' | 'gemini-1.5-pro' | 'gemini-2.0' | 'gemini-exp';
 
-export interface QuotePreference {
-  authors: string[];
-  customAuthors: string[];
-  mode: 'random' | 'selected';
+export interface Mentor {
+  id: string;
+  name: string;
+  photo?: string; // Base64
+  quotes: string[];
+  isDefault?: boolean; // If true, cannot be deleted (e.g. Virat Kohli)
 }
 
 export interface AppSettings {
   geminiModel: GeminiModelType;
-  quotePreferences: QuotePreference;
   theme: Theme;
   enableVoiceInput: boolean;
   enableVoiceResponse: boolean;
-  speakerImages: Record<string, string>; // Map author name to Base64 image
+  
+  // New Mentor System
+  mentors: Mentor[];
+  activeMentorId: string; // ID of the currently selected mentor
+  mentorMode: 'random' | 'selected';
 }
 
 export interface JudgeResult {
@@ -54,4 +59,4 @@ export interface UserStats {
   lastCompletionDate: string | null;
 }
 
-export type AppRoute = 'home' | 'settings' | 'add' | 'court' | 'voice' | 'quotes' | 'bin' | 'stats' | 'speakers';
+export type AppRoute = 'home' | 'settings' | 'add' | 'court' | 'voice' | 'quotes' | 'bin' | 'stats' | 'mentors';
